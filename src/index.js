@@ -1,17 +1,232 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
+
+class Square extends React.Component {
+  render() {
+    return (
+      <button
+        className="square"
+        onClick={() => this.props.onClick()}
+      >
+        {this.props.value}
+      </button>
+    );
+  }
+}
+
+class Board extends React.Component {
+  constructor(props) {
+    super(props);
+    this.boardSize = 20
+    this.state = {
+      squares: Array(this.boardSize ** 2).fill(null),
+      xIsNext: true,
+    };
+  }
+
+  handleClick(i) {
+    const squares = this.state.squares.slice();
+    if (calculateWinner(squares) || squares[i]) {
+      return
+    }
+    squares[i] = this.state.xIsNext ? 'X' : 'O';
+    this.setState({
+      squares: squares,
+      xIsNext: !this.state.xIsNext
+    });
+  }
+
+  renderSquare(i) {
+    return (
+      <Square
+        value={this.state.squares[i]}
+        key={i}
+        onClick={() => this.handleClick(i)}
+      />
+    );
+  }
+
+
+  renderRow(i) {
+    let squares = Array(this.boardSize)
+
+    for (let j = 0; j < this.boardSize; j++) {
+      squares[j] = this.renderSquare(this.boardSize * i + j)
+    }
+    return (
+      <div className="board-row" key={i}>
+        {squares}
+      </div>
+    )
+  }
+
+  render() {
+    let winner = calculateWinner(this.state.squares)
+    let status;
+
+    if (winner) {
+      status = `The winner is ${winner}`
+    } else {
+      status =  `Next player: ${this.state.xIsNext?'X':'O'}`;
+    }
+
+
+    let rows = []
+    for(let i = 0; i<this.boardSize; i++) {
+      let row = this.renderRow(i)
+      rows.push(row)
+    }
+
+    return (
+      <div>
+        <div className="status">{status}</div>
+        {rows}
+      </div>
+    );
+  }
+}
+
+class Game extends React.Component {
+  render() {
+    return (
+      <div className="game">
+        <div className="game-board">
+          <Board />
+        </div>
+        <div className="game-info">
+          <div>{/* status */}</div>
+          <ol>{/* TODO */}</ol>
+        </div>
+      </div>
+    );
+  }
+}
+
+// ========================================
 
 ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+  <Game />,
   document.getElementById('root')
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+
+
+function updateLongest(longestVal, longest, currentCount, cVal) {
+  longestVal = longest < currentCount ? cVal : longestVal;
+  longest = longest < currentCount ? currentCount : longest;
+  return { longestVal, longest };
+}
+
+function countConsecutiveIdenticalValues(aArray) {
+  let currentCount = 0;
+  let longest = 0;
+  let longestVal = null;
+  for (let i = 0; i < aArray.length; i++) {
+    let cVal = aArray[i];
+    if (cVal != null) {
+      if (cVal === aArray[i - 1]) {
+        currentCount++;
+        ({ longestVal, longest } = updateLongest(longestVal, longest, currentCount, cVal));
+      } else {
+        ({ longestVal, longest } = updateLongest(longestVal, longest, currentCount, cVal));
+        currentCount = 1;
+      }
+    } else {
+      ({ longestVal, longest } = updateLongest(longestVal, longest, currentCount, cVal));
+      currentCount = 1;
+    }
+  }
+  return {longest, longestVal};
+}
+
+function checkRow(squares) {
+  let size = Math.sqrt(squares.length)
+  for (let ridx = 0; ridx < size; ridx++) {
+    let rowSquares = squares.slice(ridx * size, (ridx+1) * size )
+    let {longest, longestVal} = countConsecutiveIdenticalValues(rowSquares)
+    if(longest === 5) {
+      return longestVal
+    }
+  }
+}
+
+function checkColumn(squares) {
+  let size = Math.sqrt(squares.length)
+  for (let cidx = 0; cidx < size; cidx++) {
+    let colSquares = Array(size).fill(null)
+    for (let ridx = 0; ridx < size; ridx ++) {
+      colSquares[ridx] = squares[cidx + ridx * size]
+    }
+    
+    let {longest, longestVal} = countConsecutiveIdenticalValues(colSquares)
+    if(longest == 5) {
+      return longestVal
+    }
+  }
+}
+
+function generateTLRBiagonals(size) {
+  let diags = []
+  for (let s = 0; s < 2 * size - 1; s++) {
+    let diag = []
+    for (let cidx = 0; cidx < size; cidx++) {
+      for (let ridx = size -1; ridx >= 0; ridx--) {
+        if (cidx + ridx === s) {
+          diag.push([cidx, ridx])
+        }
+      }
+    }
+    diags.push(diag)
+  }
+  return diags
+}
+
+
+function generateBLTRDiagonals(size) {
+  let diags = []
+  for (let d = -(size - 1); d < size; d++) {
+    let diag = []
+    for (let cidx = 0; cidx < size; cidx++) {
+      for (let ridx = 0; ridx <size; ridx++) {
+        if (cidx - ridx === d) {
+          diag.push([cidx, ridx])
+        }
+      }
+    }
+    diags.push(diag)
+  }
+  return diags
+}
+
+function checkDiagonal(squares) {
+  let size = Math.sqrt(squares.length);
+  let idxDiags = generateBLTRDiagonals(size);
+  idxDiags.push(...generateTLRBiagonals(size))
+  for(let i=0; i<idxDiags.length; i++) {
+    let diag = idxDiags[i].map((idx) => {
+      let [cidx, ridx] = idx;
+      return squares[cidx + ridx * size]
+    });
+    let { longest, longestVal } = countConsecutiveIdenticalValues(diag)
+    if (longest === 5) {
+      return longestVal
+    }
+  }
+}
+
+function calculateWinner(squares) {
+  console.time("checkWinner")
+  let longestVal = checkRow(squares)
+  console.log(longestVal)
+  if (longestVal == null) {
+    longestVal = checkColumn(squares)
+    console.log(longestVal)
+    if (longestVal == null) {
+      longestVal = checkDiagonal(squares)
+      console.log(longestVal)
+    }
+  }
+  console.timeEnd("checkWinner")
+  return longestVal;
+}
